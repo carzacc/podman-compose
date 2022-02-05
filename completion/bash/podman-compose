@@ -1,3 +1,63 @@
+# all functions will return 0 if they successfully complete the argument
+# (or establish there is no need or no way to complete), and something
+# other than 0 if that's not the case
+
+_completeGlobalOptArgs() {
+    # arguments to options that take paths as arguments: complete paths
+    for el in ${path_arg_global_opts}; do
+        if [[ ${prev} == ${el} ]]; then
+            COMPREPLY=( $(compgen -f -- ${cur}) )
+            return 0
+        fi
+    done
+
+    # computing comp_cword_adj, which thruthfully tells us how deep in the subcommands tree we are
+    for el in ${generic_arg_global_opts}; do
+        if [[ ${prev} == ${el} ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+_completeRoot() {
+    # if we're completing an option
+    if [[ ${cur} == -* ]]; then
+        COMPREPLY=( $(compgen -W "${global_opts}" -- ${cur}) )
+        return 0
+    fi
+    # complete root commands
+    COMPREPLY=( $(compgen -W "${root_commands}" -- ${cur}) )
+    return 0
+}
+
+# complete the first arg for `podman-compose up` and return 0
+_completeFirstUpArg() {
+    up_opts="${help_opts} -d --detach --no-color --quiet-pull --no-deps --force-recreate --always-recreate-deps --no-recreate --no-build --no-start --build --abort-on-container-exit -t --timeout -V --renew-anon-volumes --remove-orphans --scale --exit-code-from --pull --pull-always --build-arg --no-cache"
+    if [[ ${cur} == -* ]]; then
+        COMPREPLY=( $(compgen -W "${up_opts}" -- ${cur}) )
+        return 0
+    else
+        # ideally we should complete service names,
+        # but parsing the compose spec file in the
+        # completion script is probably a bit overkill
+        return 0
+    fi
+
+}
+
+_completeFirstArg() {
+    help_opts="-h --help"
+    case $chosen_root_command in
+        up)
+            _completeFirstUpArg
+            return 0
+    esac
+    return 0
+}
+
+
+
 _podmanCompose() {
     cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -14,26 +74,16 @@ _podmanCompose() {
     arg_global_opts_array=($arg_global_opts)
     global_opts="${basic_global_opts} ${arg_global_opts}"
 
+    chosen_root_command=""
 
-    
 
-    # completing simple cases that don't require to know much about the command
-
-    # arguments to options that take paths as arguments: complete paths
-    for el in ${path_arg_global_opts}; do
-        if [[ ${prev} == ${el} ]]; then
-            COMPREPLY=( $(compgen -f -- ${cur}) )
-            return 0
-        fi
-    done
-    # arguments to options that take arbitrary user-defined string as arguments: don't complete anything
-    for el in ${generic_arg_global_opts}; do
-        if [[ ${prev} == ${el} ]]; then
-            return 0
-        fi
-    done
-
+    _completeGlobalOptArgs
+    if [[ $? -eq 0 ]]; then
+        return 0
+    fi
+   
     # computing comp_cword_adj, which thruthfully tells us how deep in the subcommands tree we are
+    # additionally, set the chosen_root_command if possible
     comp_cword_adj=${COMP_CWORD}
     if [[ ${COMP_CWORD} -ge 2 ]]; then
         skip_next="no"
@@ -45,25 +95,35 @@ _podmanCompose() {
             fi
             if [[ ${el} == -* && ${el} != ${cur} ]]; then
                 let "comp_cword_adj--"
+                
                 for opt in ${arg_global_opts_array[@]}; do
                     if [[ ${el} == ${opt} ]]; then
                         skip_next="yes"
                     fi
                 done
+            elif [[ ${el} != ${cur} && ${el} != ${COMP_WORDS[0]} && ${chosen_root_command} == "" ]]; then
+                chosen_root_command=${el}
             fi
         done
     fi
     
-    # if we're at the root
     if [[ ${comp_cword_adj} -eq 1 ]]; then
-        # if we're completing an options
-        if [[ ${cur} == -* ]]; then
-            COMPREPLY=( $(compgen -W "${global_opts}" -- ${cur}) )
+       _completeRoot
+
+       # Given that we check the value of comp_cword_adj outside
+       # of it, at the moment _completeRoot should always return
+       # 0, this is just here in case changes are made. The same
+       # will apply to similar functions below
+        if [[ $? -eq 0 ]]; then
             return 0
         fi
-        # complete root commands
-        COMPREPLY=( $(compgen -W "${root_commands}" -- ${cur}) )
-        return 0
+    fi
+    if [[ ${comp_cword_adj} -eq 2 ]]; then
+        _completeFirstArg
+
+        if [[ $? -eq 0 ]]; then
+            return 0
+        fi
     fi
 }
 
