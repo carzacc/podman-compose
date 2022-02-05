@@ -1,0 +1,70 @@
+_podmanCompose() {
+    cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[COMP_CWORD-1]}"
+    root_commands="help version pull push build up down ps run exec start stop restart logs"
+    # global options that don't take additional arguments
+    basic_global_opts="-h --help -v --no-ansi --no-cleanup --dry-run" 
+    # global options that take paths as arguments
+    path_arg_global_opts="-f --file --podman-path"
+    path_arg_global_opts_array=($arg_global_opts)
+    # global options that take arguments that are not files
+    generic_arg_global_opts="-p --project-name --podman-path --podman-args --podman-pull-args --podman-push-args --podman-build-args --podman-inspect-args --podman-run-args --podman-start-args --podman-stop-args --podman-rm-args --podman-volume-args"
+    generic_arg_global_opts_array=($generic_arg_global_opts)
+    arg_global_opts="${path_arg_global_opts} ${generic_arg_global_opts}"
+    arg_global_opts_array=($arg_global_opts)
+    global_opts="${basic_global_opts} ${arg_global_opts}"
+
+
+    
+
+    # completing simple cases that don't require to know much about the command
+
+    # arguments to options that take paths as arguments: complete paths
+    for el in ${path_arg_global_opts}; do
+        if [[ ${prev} == ${el} ]]; then
+            COMPREPLY=( $(compgen -f -- ${cur}) )
+            return 0
+        fi
+    done
+    # arguments to options that take arbitrary user-defined string as arguments: don't complete anything
+    for el in ${generic_arg_global_opts}; do
+        if [[ ${prev} == ${el} ]]; then
+            return 0
+        fi
+    done
+
+    # computing comp_cword_adj, which thruthfully tells us how deep in the subcommands tree we are
+    comp_cword_adj=${COMP_CWORD}
+    if [[ ${COMP_CWORD} -ge 2 ]]; then
+        skip_next="no"
+        for el in ${COMP_WORDS[@]}; do
+            if [[ ${skip_next} == "yes" ]]; then
+                let "comp_cword_adj--"
+                skip_next="no"
+                continue
+            fi
+            if [[ ${el} == -* && ${el} != ${cur} ]]; then
+                let "comp_cword_adj--"
+                for opt in ${arg_global_opts_array[@]}; do
+                    if [[ ${el} == ${opt} ]]; then
+                        skip_next="yes"
+                    fi
+                done
+            fi
+        done
+    fi
+    
+    # if we're at the root
+    if [[ ${comp_cword_adj} -eq 1 ]]; then
+        # if we're completing an options
+        if [[ ${cur} == -* ]]; then
+            COMPREPLY=( $(compgen -W "${global_opts}" -- ${cur}) )
+            return 0
+        fi
+        # complete root commands
+        COMPREPLY=( $(compgen -W "${root_commands}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -F _podmanCompose podman-compose
