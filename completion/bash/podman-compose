@@ -31,30 +31,32 @@ _completeRoot() {
     return 0
 }
 
-# complete the first arg for `podman-compose up` and return 0
-_completeFirstUpArg() {
+_completeServiceNames() {
+    # ideally we should complete service names,
+    # but parsing the compose spec file in the
+    # completion script is quite complex
+    return 0
+}
+
+
+# complete the arguments for `podman-compose up` and return 0
+_completeUpArgs() {
     up_opts="${help_opts} -d --detach --no-color --quiet-pull --no-deps --force-recreate --always-recreate-deps --no-recreate --no-build --no-start --build --abort-on-container-exit -t --timeout -V --renew-anon-volumes --remove-orphans --scale --exit-code-from --pull --pull-always --build-arg --no-cache"
-    if [[ ${cur} == -* ]]; then
+    if [[ ${prev} == "--scale" || ${prev} == "-t" || ${prev} == "--timeout" ]]; then
+        return 0
+    elif [[ ${cur} == -* ]]; then
         COMPREPLY=( $(compgen -W "${up_opts}" -- ${cur}) )
         return 0
     else
-        # ideally we should complete service names,
-        # but parsing the compose spec file in the
-        # completion script is probably a bit overkill
+        _completeServiceNames
+        if [[ $? -eq 0 ]]; then
+            return 0
+        fi
         return 0
     fi
 
 }
 
-_completeFirstArg() {
-    help_opts="-h --help"
-    case $chosen_root_command in
-        up)
-            _completeFirstUpArg
-            return 0
-    esac
-    return 0
-}
 
 
 
@@ -118,13 +120,19 @@ _podmanCompose() {
             return 0
         fi
     fi
-    if [[ ${comp_cword_adj} -eq 2 ]]; then
-        _completeFirstArg
-
-        if [[ $? -eq 0 ]]; then
-            return 0
-        fi
-    fi
+    case $chosen_root_command in
+        up)
+            _completeUpArgs
+            if [[ $? -eq 0 ]]; then
+                return 0
+            fi
+            ;;
+        exec)
+            if [[ ${comp_cword_adj} -eq 2 ]]; then
+                return 0
+            fi
+    esac
+    echo unsupported
 }
 
 complete -F _podmanCompose podman-compose
